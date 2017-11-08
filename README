@@ -1,4 +1,5 @@
 Improved version ---- NOT NOT NOT official
+For self-use. Very lazy to modify this version every time on a new computer
     Based on version 3.23
 
 by Dr. Fu-Hao Lu   (Post-Doc)
@@ -8,6 +9,15 @@ Cell and Developmental Biology,
 John Innes Center,
 Norwich NR4 7UH, UK
 -----------------------------------------
+
+
+Simple Compile
+    $ make check
+    $ make install
+
+For x64, support longer reference sequences (>536870908 bp)
+    $ make check
+    $ make CPPFLAGS=" -O3 -DSIXTYFOURBITS"
 
 
 
