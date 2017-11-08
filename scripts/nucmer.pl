@@ -333,16 +333,20 @@ sub main ( )
 
     #-- Run mummer | mgaps and assert return value is zero
     print (STDERR "2,3: RUNNING mummer AND CREATING CLUSTERS\n");
-    open(ALGO_PIPE, "$algo_path $algo $mdir -l $size -n $pfx.ntref $qry_file |")
-	or $tigr->bail ("ERROR: could not open $algo_path output pipe $!");
-    open(CLUS_PIPE, "| $mgaps_path -l $clus -s $gap -d $ddiff -f $dfrac > $pfx.mgaps")
-	or $tigr->bail ("ERROR: could not open $mgaps_path input pipe $!");
-    while ( <ALGO_PIPE> ) {
-	print CLUS_PIPE
-	or $tigr->bail ("ERROR: could not write to $mgaps_path pipe $!");
-    }
-    $err[0] = close(ALGO_PIPE);
-    $err[1] = close(CLUS_PIPE);
+	$err[0] = $tigr->runCommand ("$algo_path $algo $mdir -l $size -n $pfx.ntref $qry_file > $pfx.mummer");
+	if ( $err[0] != 0 ) {
+		$tigr->bail("ERROR: Error: mummer output error\n");
+	}
+	unless (-s "$pfx.mummer") {
+		$tigr->bail ("Error: mummer output error\n");
+	}
+	open(ALGO_FILE, "< $pfx.mummer") or $tigr->bail ("ERROR: could not open $algo_path output file: $pfx.mummer");
+	open(CLUS_PIPE, "| $mgaps_path -l $clus -s $gap -d $ddiff -f $dfrac > $pfx.mgaps") or $tigr->bail ("ERROR: could not open $mgaps_path input pipe $!");
+	while ( <ALGO_FILE> ) {
+		print CLUS_PIPE or $tigr->bail ("ERROR: could not write to $mgaps_path pipe $!");
+	}
+	$err[0] = close(ALGO_FILE);
+	$err[1] = close(CLUS_PIPE);
 
     if ( $err[0] == 0  ||  $err[1] == 0 ) {
 	$tigr->bail ("ERROR: mummer and/or mgaps returned non-zero\n");

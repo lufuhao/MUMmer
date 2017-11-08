@@ -44,8 +44,8 @@ my %TERMSIZE =
      );
 
 #-- terminal format
-my $FFACE    = "Courier";
-my $FSIZE    = "8";
+my $FFACE    = "Arial";
+my $FSIZE    = "10";
 my $TFORMAT  = "%.0f";
 my $MFORMAT  = "[%.0f, %.0f]";
 
@@ -56,8 +56,7 @@ my $REVPLOT = "rplot";
 my $HLTPLOT = "hplot";
 my $GNUPLOT = "gnuplot";
 
-my %SUFFIX =
-    (
+my %SUFFIX = (
      $FILTER  => ".filter",
      $FWDPLOT => ".fplot",
      $REVPLOT => ".rplot",
@@ -562,7 +561,7 @@ sub ParseMummer ($)
 
     while ( <MFILE> ) {
         #-- 3 column match
-        if ( /^\s+(\d+)\s+(\d+)\s+(\d+)$/ ) {
+        if ( /^\s*(\d+)\s+(\d+)\s+(\d+)$/ ) {
             @align = ($1, $1, $2, $2, 100, 0, $lenQ, "REF", $idQ);
             $len = $3 - 1;
             $align[1] += $len;
@@ -572,7 +571,7 @@ sub ParseMummer ($)
         }
 
         #-- 4 column match
-        if ( /^\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)$/ ) {
+        if ( /^\s*(\S+)\s+(\d+)\s+(\d+)\s+(\d+)$/ ) {
             @align = ($2, $2, $3, $3, 100, 0, $lenQ, $1, $idQ);
             $len = $4 - 1;
             $align[1] += $len;
@@ -784,7 +783,7 @@ sub LayoutIDs ($$)
     }
     #-- append the guys left out of the layout
     foreach $idQ ( keys %{$qref} ) {
-        if ( !defined $qref->{$idQ}[0] ) {
+        if (! defined $qref->{$idQ}[0]) {
             $qref->{$idQ}[0] = $qoff;
             $qoff += $qref->{$idQ}[1] - 1;
         }
@@ -881,7 +880,7 @@ sub PlotData ($$$)
         my ($refoff, $reflen, $refdir);
         my ($qryoff, $qrylen, $qrydir);
 
-        if ( defined (%$rref) ) {
+        if (%$rref) {
             #-- skip reference sequence or set atts from hash
             if ( !exists ($rref->{$idR}) ) { next; }
             else { ($refoff, $reflen, $refdir) = @{$rref->{$idR}}; }
@@ -891,7 +890,7 @@ sub PlotData ($$$)
             ($refoff, $reflen, $refdir) = (0, $lenR, 1);
         }
 
-        if ( defined (%$qref) ) {
+        if (%$qref) {
             #-- skip query sequence or set atts from hash
             if ( !exists ($qref->{$idQ}) ) { next; }
             else { ($qryoff, $qrylen, $qrydir) = @{$qref->{$idQ}}; }
@@ -978,7 +977,7 @@ sub PlotData ($$$)
             my ($refoff, $reflen, $refdir);
             my ($qryoff, $qrylen, $qrydir);
             
-            if ( defined (%$rref) ) {
+            if (%$rref) {
                 #-- skip reference sequence or set atts from hash
                 if ( !exists ($rref->{$idR}) ) { next; }
                 else { ($refoff, $reflen, $refdir) = @{$rref->{$idR}}; }
@@ -988,7 +987,7 @@ sub PlotData ($$$)
                 ($refoff, $reflen, $refdir) = (0, $lenR, 1);
             }
             
-            if ( defined (%$qref) ) {
+            if (%$qref) {
                 #-- skip query sequence or set atts from hash
                 if ( !exists ($qref->{$idQ}) ) { next; }
                 else { ($qryoff, $qrylen, $qrydir) = @{$qref->{$idQ}}; }
@@ -1031,7 +1030,7 @@ sub PlotData ($$$)
     }
 
 
-    if ( !defined (%$rref) ) {
+    if (! %$rref) {
         if ( $ismultiref ) {
             print STDERR
                 "WARNING: Multiple ref sequences overlaid, try -R or -r\n";
@@ -1041,7 +1040,7 @@ sub PlotData ($$$)
         }
     }
 
-    if ( !defined (%$qref) ) {
+    if (! %$qref) {
         if ( $ismultiqry && !$OPT_coverage ) {
             print STDERR
                 "WARNING: Multiple qry sequences overlaid, try -Q, -q or -c\n";

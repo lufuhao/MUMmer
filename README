@@ -9,13 +9,24 @@ John Innes Center,
 Norwich NR4 7UH, UK
 -----------------------------------------
 
+
+
 Todo:
+	to include E-mem, which is support multi-threads
 
 
 Done:
 
 
+20171108
+  nucmer: 
+    1. separate mummer and mgaps pipe into two parts
+    2. will run mummer first and then mgaps, instead at the same time via pipe
+    3. Running both at the same time could report error sometimes
 
+  mummerplot
+    1. line 565 and line 575: '^\s+' to '^\s*'
+    2. line 884, 894, 981, 991, 1034, 1044: old PERL grammar
 
 
 -=- MUMmer3.x README -=-
