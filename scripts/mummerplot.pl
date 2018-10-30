@@ -30,17 +30,18 @@ my $SCRIPT_DIR = "__SCRIPT_DIR";
 my $X11    = "x11";
 my $PS     = "postscript";
 my $PNG    = "png";
+my $EPS    = "eps"
 
 #-- terminal sizes
 my $SMALL  = "small";
 my $MEDIUM = "medium";
 my $LARGE  = "large";
 
-my %TERMSIZE =
-    (
+my %TERMSIZE = (
      $X11 => { $SMALL => 500, $MEDIUM => 700,  $LARGE => 900  }, # screen pix
      $PS  => { $SMALL => 1,   $MEDIUM => 2,    $LARGE => 3    }, # pages
      $PNG => { $SMALL => 800, $MEDIUM => 1024, $LARGE => 1400 }  # image pix
+     $EPS => { $SMALL => 1,   $MEDIUM => 2,    $LARGE => 3    }, # pages
      );
 
 #-- terminal format
@@ -63,7 +64,8 @@ my %SUFFIX = (
      $HLTPLOT => ".hplot",
      $GNUPLOT => ".gp",
      $PS      => ".ps",
-     $PNG     => ".png"
+     $PNG     => ".png",
+     $EPS     => ".eps"
      );
 
 
@@ -94,7 +96,7 @@ my $OPT_Ffile;                     # .fplot output
 my $OPT_Rfile;                     # .rplot output
 my $OPT_Hfile;                     # .hplot output
 my $OPT_Gfile;                     # .gp output
-my $OPT_Pfile;                     # .ps .png output
+my $OPT_Pfile;                     # .ps .png .eps output
 
 my $OPT_gpstatus;                  # gnuplot status
 
@@ -104,11 +106,10 @@ my $OPT_ONLY_USE_FATTEST;          # Only use fattest alignment for layout
 #============================================================== Foundation ====#
 my $VERSION = '3.5';
 
-my $USAGE = qq~
-  USAGE: mummerplot  [options]  <match file>
-    ~;
+my $USAGE = "\nUSAGE: mummerplot  [options]  <match file>\n";
 
-my $HELP = qq~
+use constant HELPINFO =><<EOH;
+
   USAGE: mummerplot  [options]  <match file>
 
   DESCRIPTION:
@@ -119,7 +120,7 @@ my $HELP = qq~
     output and the resulting .gp and .[frh]plot files will remain so that the
     user may run gnuplot independently. If the attempt succeeds, either an x11
     window will be spawned or an additional output file will be generated
-    (.ps or .png depending on the selected terminal). Feel free to edit the
+    (.ps or .png or .eps depending on the selected terminal). Feel free to edit the
     resulting gnuplot script (.gp) and rerun gnuplot to change line thinkness,
     labels, colors, plot size etc.
 
@@ -164,17 +165,16 @@ my $HELP = qq~
                     --small --medium --large (default '$OPT_size')
     -S
     --SNP           Highlight SNP locations in each alignment
-    -t|terminal     Set the output terminal to x11, postscript or png
-                    --x11 --postscript --png (default '$OPT_terminal')
+    -t|terminal     Set the output terminal to x11, postscript or png or EPS
+                    --x11 --postscript --png --eps (default '$OPT_terminal')
     -t|title        Specify the gnuplot plot title (default none)
     -x|xrange       Set the xrange for the plot '[min:max]'
     -y|yrange       Set the yrange for the plot '[min:max]'
     -V
     --version       Display the version information and exit
-    ~;
+EOH
 
-my @DEPEND =
-    (
+my @DEPEND = (
      "$SCRIPT_DIR/Foundation.pm",
      "$BIN_DIR/delta-filter",
      "$BIN_DIR/show-coords",
@@ -187,7 +187,7 @@ my $tigr = new TIGR::Foundation
 
 $tigr -> setVersionInfo ($VERSION);
 $tigr -> setUsageInfo ($USAGE);
-$tigr -> setHelpInfo ($HELP);
+$tigr -> setHelpInfo (HELPINFO);
 $tigr -> addDependInfo (@DEPEND);
 
 
@@ -213,102 +213,103 @@ sub ParseOptions( );
 
 
 #=========================================================== Function Defs ====#
-MAIN:
-{
-    my @aligns;                # (sR eR sQ eQ sim lenR lenQ idR idQ)
-    my %refs;                  # (id => (off, len, [1/-1]))
-    my %qrys;                  # (id => (off, len, [1/-1]))
+MAIN: {
+	my @aligns;                # (sR eR sQ eQ sim lenR lenQ idR idQ)
+	my %refs;                  # (id => (off, len, [1/-1]))
+	my %qrys;                  # (id => (off, len, [1/-1]))
 
-    #-- Get the command line options (sets OPT_ global vars)
-    ParseOptions( );
-
-
-    #-- Get the alignment type
-    my $parsefunc = GetParseFunc( );
-
-    if ( $parsefunc != \&ParseDelta &&
-         ($OPT_filter || $OPT_layout || $OPT_SNP) ) {
-        print STDERR "WARNING: -f -l -S only work with delta input\n";
-        undef $OPT_filter;
-        undef $OPT_layout;
-        undef $OPT_SNP;
-    }
-
-    #-- Parse the reference and query IDs
-    if    ( defined $OPT_IdR ) { $refs{$OPT_IdR} = [ 0, 0, 1 ]; }
-    elsif ( defined $OPT_IDRfile ) {
-        ParseIDs ($OPT_IDRfile, \%refs);
-    }
-
-    if    ( defined $OPT_IdQ ) { $qrys{$OPT_IdQ} = [ 0, 0, 1 ]; }
-    elsif ( defined $OPT_IDQfile ) {
-        ParseIDs ($OPT_IDQfile, \%qrys);
-    }
+	#-- Get the command line options (sets OPT_ global vars)
+	ParseOptions( );
 
 
-    #-- Filter the alignments
-    if ( $OPT_filter || $OPT_layout ) {
-        print STDERR "Writing filtered delta file $OPT_Dfile\n";
-        system ("$BIN_DIR/delta-filter -r -q $OPT_Mfile > $OPT_Dfile")
-            and die "ERROR: Could not run delta-filter, $!\n";
-        if ( $OPT_filter ) { $OPT_Mfile = $OPT_Dfile; }
-    }
+	#-- Get the alignment type
+	my $parsefunc = GetParseFunc( );
+
+	if ( $parsefunc != \&ParseDelta &&
+		($OPT_filter || $OPT_layout || $OPT_SNP) ) {
+		print STDERR "WARNING: -f -l -S only work with delta input\n";
+		undef $OPT_filter;
+		undef $OPT_layout;
+		undef $OPT_SNP;
+	}
+
+	#-- Parse the reference and query IDs
+	if ( defined $OPT_IdR ) { $refs{$OPT_IdR} = [ 0, 0, 1 ]; }
+	elsif ( defined $OPT_IDRfile ) {
+		ParseIDs ($OPT_IDRfile, \%refs);
+	}
+
+	if ( defined $OPT_IdQ ) { $qrys{$OPT_IdQ} = [ 0, 0, 1 ]; }
+	elsif ( defined $OPT_IDQfile ) {
+		ParseIDs ($OPT_IDQfile, \%qrys);
+	}
 
 
-    #-- Parse the alignment data
-    $parsefunc->(\@aligns);
-
-    
-    #-- Layout the alignment data if requested
-    if ( $OPT_layout ) {
-        if ( scalar (keys %refs) || scalar (keys %qrys) ) {
-            LayoutIDs (\%refs, \%qrys);
-        }
-        else {
-            print STDERR "WARNING: --layout option only works with -R or -Q\n";
-            undef $OPT_layout;
-        }
-    }
+	#-- Filter the alignments
+	if ( $OPT_filter || $OPT_layout ) {
+		print STDERR "Writing filtered delta file $OPT_Dfile\n";
+		system ("$BIN_DIR/delta-filter -r -q $OPT_Mfile > $OPT_Dfile")
+			and die "ERROR: Could not run delta-filter, $!\n";
+		if ( $OPT_filter ) { $OPT_Mfile = $OPT_Dfile; }
+	}
 
 
-    #-- Plot the alignment data
-    PlotData (\@aligns, \%refs, \%qrys);
+	#-- Parse the alignment data
+	$parsefunc->(\@aligns);
 
 
-    #-- Write the gnuplot script
-    WriteGP (\%refs, \%qrys);
+	#-- Layout the alignment data if requested
+	if ( $OPT_layout ) {
+		if ( scalar (keys %refs) || scalar (keys %qrys) ) {
+			LayoutIDs (\%refs, \%qrys);
+		}
+		else {
+			print STDERR "WARNING: --layout option only works with -R or -Q\n";
+			undef $OPT_layout;
+		}
+	}
 
 
-    #-- Run gnuplot script and fork a clipboard listener
-    unless ( $OPT_gpstatus == -1 ) {
+	#-- Plot the alignment data
+	PlotData (\@aligns, \%refs, \%qrys);
 
-        my $child = 1;
-        if ( $OPT_gpstatus == 0 && $OPT_terminal eq $X11 ) {
-            print STDERR "Forking mouse listener\n";
-            $child = fork;
-        }
 
-        #-- parent runs gnuplot
-        if ( $child ) {
-            RunGP( );
-            kill 1, $child;
-        }
-        #-- child listens to clipboard
-        elsif ( defined $child ) {
-            ListenGP(\%refs, \%qrys);
-        }
-        else {
-            print STDERR "WARNING: Could not fork mouse listener\n";
-        }
-    }
+	#-- Write the gnuplot script
+	WriteGP (\%refs, \%qrys);
 
-    exit (0);
+
+	#-- Run gnuplot script and fork a clipboard listener
+	unless ( $OPT_gpstatus == -1 ) {
+		my $child = 1;
+		if ( $OPT_gpstatus == 0 && $OPT_terminal eq $X11 ) {
+			print STDERR "Forking mouse listener\n";
+			$child = fork;
+		}
+
+		#-- parent runs gnuplot
+		if ( $child ) {
+			RunGP( );
+			kill 1, $child;
+		}
+		#-- child listens to clipboard
+		elsif ( defined $child ) {
+			ListenGP(\%refs, \%qrys);
+		}
+		else {
+			print STDERR "WARNING: Could not fork mouse listener\n";
+		}
+	}
+
+	exit (0);
 }
 
 
+
+####################################################################
+################ Sub Functions #####################################
+####################################################################
 #------------------------------------------------------------ GetParseFunc ----#
-sub GetParseFunc ( )
-{
+sub GetParseFunc ( ) {
     my $fref;
 
     open (MFILE, "<$OPT_Mfile")
@@ -357,7 +358,7 @@ sub GetParseFunc ( )
               }
           }
       }
-      
+
       #-- default
       die "ERROR: Could not read $OPT_Mfile, Unrecognized file type\n";
   }
@@ -370,13 +371,11 @@ sub GetParseFunc ( )
 
 
 #---------------------------------------------------------------- ParseIDs ----#
-sub ParseIDs ($$)
-{
+sub ParseIDs ($$) {
     my $file = shift;
     my $href = shift;
 
-    open (IDFILE, "<$file")
-        or print STDERR "WARNING: Could not open $file, $!\n";
+    open (IDFILE, "<$file") or print STDERR "WARNING: Could not open $file, $!\n";
 
     my $dir;
     my $aref;
@@ -435,8 +434,7 @@ sub ParseIDs ($$)
 
 
 #-------------------------------------------------------------- ParseDelta ----#
-sub ParseDelta ($)
-{
+sub ParseDelta ($) {
     my $aref = shift;
 
     print STDERR "Reading delta file $OPT_Mfile\n";
@@ -496,8 +494,7 @@ sub ParseDelta ($)
 
 
 #------------------------------------------------------------ ParseCluster ----#
-sub ParseCluster ($)
-{
+sub ParseCluster ($) {
     my $aref = shift;
 
     print STDERR "Reading cluster file $OPT_Mfile\n";
@@ -546,8 +543,7 @@ sub ParseCluster ($)
 
 
 #------------------------------------------------------------- ParseMummer ----#
-sub ParseMummer ($)
-{
+sub ParseMummer ($) {
     my $aref = shift;
 
     print STDERR "Reading mummer file $OPT_Mfile (use mummer -c)\n";
@@ -598,8 +594,7 @@ sub ParseMummer ($)
 
 
 #------------------------------------------------------------- ParseTiling ----#
-sub ParseTiling ($)
-{
+sub ParseTiling ($) {
     my $aref = shift;
 
     print STDERR "Reading tiling file $OPT_Mfile\n";
@@ -650,8 +645,7 @@ sub ParseTiling ($)
 # counterparts until all spanning sequences have been placed. The goal
 # is to cluster all the "major" alignment information along the main
 # diagonal for easy viewing and interpretation.
-sub LayoutIDs ($$)
-{
+sub LayoutIDs ($$) {
     my $rref = shift;
     my $qref = shift;
 
@@ -700,21 +694,17 @@ sub LayoutIDs ($$)
         $loQ = $dQ == 1 ? $sQ : $eQ;
         $hiQ = $dQ == 1 ? $eQ : $sQ;
 
-        if ($OPT_ONLY_USE_FATTEST)
-        {
+        if ($OPT_ONLY_USE_FATTEST) {
           #-- Check to see if there is another better alignment
-          if (exists $qc{$idQ})
-          {
+          if (exists $qc{$idQ}) {
             my ($oldR) = keys %{$qc{$idQ}[2]};
             my $val = $qc{$idQ}[2]{$oldR};
 
-            if (${$val->[4]} - ${$val->[3]} > $hiR - $loR)
-            {
+            if (${$val->[4]} - ${$val->[3]} > $hiR - $loR) {
               #-- Old alignment is better, skip this one
               next;
             }
-            else
-            {
+            else {
               #-- This alignment is better, prune old alignment
               delete $rc{$oldR}[2]{$idQ};
               delete $qc{$idQ};
@@ -837,26 +827,21 @@ sub SpanXwY ($$$$$) {
 
 
 #---------------------------------------------------------------- PlotData ----#
-sub PlotData ($$$)
-{
+sub PlotData ($$$) {
     my $aref = shift;
     my $rref = shift;
     my $qref = shift;
 
-    print STDERR "Writing plot files $OPT_Ffile, $OPT_Rfile",
-    (defined $OPT_Hfile ? ", $OPT_Hfile\n" : "\n");
+    print STDERR "Writing plot files $OPT_Ffile, $OPT_Rfile", (defined $OPT_Hfile ? ", $OPT_Hfile\n" : "\n");
 
-    open (FFILE, ">$OPT_Ffile")
-        or die "ERROR: Could not open $OPT_Ffile, $!\n";
+    open (FFILE, ">$OPT_Ffile") or die "ERROR: Could not open $OPT_Ffile, $!\n";
     print FFILE "#-- forward hits sorted by %sim\n0 0 0\n0 0 0\n\n\n";
 
-    open (RFILE, ">$OPT_Rfile")
-        or die "ERROR: Could not open $OPT_Rfile, $!\n";
+    open (RFILE, ">$OPT_Rfile") or die "ERROR: Could not open $OPT_Rfile, $!\n";
     print RFILE "#-- reverse hits sorted by %sim\n0 0 0\n0 0 0\n\n\n";
 
     if ( defined $OPT_Hfile ) {
-        open (HFILE, ">$OPT_Hfile")
-            or die "ERROR: Could not open $OPT_Hfile, $!\n";
+        open (HFILE, ">$OPT_Hfile") or die "ERROR: Could not open $OPT_Hfile, $!\n";
         print HFILE "#-- highlighted hits sorted by %sim\n0 0 0\n0 0 0\n\n\n";
     }
 
@@ -957,8 +942,7 @@ sub PlotData ($$$)
 
         print STDERR "Determining SNPs from sequence and alignment data\n";
 
-        open (SNPS, "$BIN_DIR/show-snps -H -T -l $OPT_Mfile |")
-            or die "ERROR: Could not open show-snps pipe, $!\n";
+        open (SNPS, "$BIN_DIR/show-snps -H -T -l $OPT_Mfile |") or die "ERROR: Could not open show-snps pipe, $!\n";
 
         my @snps;
         my ($pR, $pQ, $lenR, $lenQ, $idR, $idQ);
@@ -1057,249 +1041,257 @@ sub PlotData ($$$)
 
 
 #----------------------------------------------------------------- WriteGP ----#
-sub WriteGP ($$)
-{
-    my $rref = shift;
-    my $qref = shift;
+sub WriteGP ($$) {
+	my $rref = shift;
+	my $qref = shift;
 
-    print STDERR "Writing gnuplot script $OPT_Gfile\n";
+	print STDERR "Writing gnuplot script $OPT_Gfile\n";
 
-    open (GFILE, ">$OPT_Gfile")
-        or die "ERROR: Could not open $OPT_Gfile, $!\n";
+	open (GFILE, ">$OPT_Gfile") or die "ERROR: Could not open $OPT_Gfile, $!\n";
 
-    my ($FWD, $REV, $HLT) = (1, 2, 3);
-    my $SIZE = $TERMSIZE{$OPT_terminal}{$OPT_size};
+	my ($FWD, $REV, $HLT) = (1, 2, 3);
+	my $SIZE = $TERMSIZE{$OPT_terminal}{$OPT_size};
 
-    #-- terminal specific stuff
-    my ($P_TERM, $P_SIZE, %P_PS, %P_LW);
-    foreach ( $OPT_terminal ) {
-        /^$X11/    and do {
-            $P_TERM = $OPT_gpstatus == 0 ?
-                "$X11 font \"$FFACE,$FSIZE\"" : "$X11";
+	#-- terminal specific stuff
+	my ($P_TERM, $P_SIZE, %P_PS, %P_LW);
+	foreach ($OPT_terminal) {
+		/^$X11/    and do {
+			$P_TERM = $OPT_gpstatus == 0 ? "$X11 font \"$FFACE,$FSIZE\"" : "$X11";
 
-            %P_PS = ( $FWD => 1.0, $REV => 1.0, $HLT => 1.0 );
+			%P_PS = ( $FWD => 1.0, $REV => 1.0, $HLT => 1.0 );
 
-            %P_LW = $OPT_coverage || $OPT_color ?
-                ( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 ) :
-                ( $FWD => 2.0, $REV => 2.0, $HLT => 2.0 );
+			%P_LW = $OPT_coverage || $OPT_color ?
+				( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 ) :
+				( $FWD => 2.0, $REV => 2.0, $HLT => 2.0 );
 
-            $P_SIZE = $OPT_coverage ?
-                "set size 1,1" :
-                "set size 1,1";
+			$P_SIZE = $OPT_coverage ?
+				"set size 1,1" :
+				"set size 1,1";
 
-            last;
-        };
+			last;
+		};
 
-        /^$PS/     and do {
-            $P_TERM = defined $OPT_color && $OPT_color == 0 ?
-                "$PS monochrome" : "$PS color";
-            $P_TERM .= $OPT_gpstatus == 0 ?
-                " solid \"$FFACE\" $FSIZE" : " solid \"$FFACE\" $FSIZE";
+		/^$PS/     and do {
+			$P_TERM = defined $OPT_color && $OPT_color == 0 ? "$PS monochrome" : "$PS color";
+			$P_TERM .= $OPT_gpstatus == 0 ? " solid \"$FFACE\" $FSIZE" : " solid \"$FFACE\" $FSIZE";
 
-            %P_PS = ( $FWD => 0.5, $REV => 0.5, $HLT => 0.5 );
+			%P_PS = ( $FWD => 0.5, $REV => 0.5, $HLT => 0.5 );
 
-            %P_LW = $OPT_coverage || $OPT_color ?
-                ( $FWD => 4.0, $REV => 4.0, $HLT => 4.0 ) :
-                ( $FWD => 2.0, $REV => 2.0, $HLT => 2.0 );
+			%P_LW = $OPT_coverage || $OPT_color ?
+				( $FWD => 4.0, $REV => 4.0, $HLT => 4.0 ) :
+				( $FWD => 2.0, $REV => 2.0, $HLT => 2.0 );
 
-            $P_SIZE = $OPT_coverage ?
-                "set size ".(1.0 * $SIZE).",".(0.5 * $SIZE) :
-                "set size ".(1.0 * $SIZE).",".(1.0 * $SIZE);
+			$P_SIZE = $OPT_coverage ?
+				"set size ".(1.0 * $SIZE).",".(0.5 * $SIZE) :
+				"set size ".(1.0 * $SIZE).",".(1.0 * $SIZE);
 
-            last;
-        };
+			last;
+		};
 
-        /^$PNG/    and do {
-            $P_TERM = $OPT_gpstatus == 0 ?
-                "$PNG tiny size $SIZE,$SIZE" : "$PNG small";
-            if ( defined $OPT_color && $OPT_color == 0 ) {
-                $P_TERM .= " xffffff x000000 x000000";
-                $P_TERM .= " x000000 x000000 x000000";
-                $P_TERM .= " x000000 x000000 x000000";
-            }
-            
-            %P_PS = ( $FWD => 1.0, $REV => 1.0, $HLT => 1.0 );
+		/^$PNG/    and do {
+			$P_TERM = $OPT_gpstatus == 0 ? "$PNG tiny size $SIZE,$SIZE" : "$PNG small";
+			if ( defined $OPT_color && $OPT_color == 0 ) {
+				$P_TERM .= " xffffff x000000 x000000";
+				$P_TERM .= " x000000 x000000 x000000";
+				$P_TERM .= " x000000 x000000 x000000";
+			}
 
-            %P_LW = $OPT_coverage || $OPT_color ?
-                ( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 ) :
-                ( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 );
+			%P_PS = ( $FWD => 1.0, $REV => 1.0, $HLT => 1.0 );
 
-            $P_SIZE = $OPT_coverage ?
-                "set size 1,.375" :
-                "set size 1,1";
+			%P_LW = $OPT_coverage || $OPT_color ?
+				( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 ) :
+				( $FWD => 3.0, $REV => 3.0, $HLT => 3.0 );
 
-            last;
-        };
+			$P_SIZE = $OPT_coverage ?
+				"set size 1,.375" :
+				"set size 1,1";
 
-        die "ERROR: Don't know how to initialize terminal, $OPT_terminal\n";
-    }
+			last;
+		};
 
-    #-- plot commands
-    my ($P_WITH, $P_FORMAT, $P_LS, $P_KEY, %P_PT, %P_LT);
+		/^$EPS/ and do {
+			$P_TERM = defined $OPT_color && $OPT_color == 0 ? "postscript enhanced monochrome" : "postscript enhanced color";
+			$P_TERM .= $OPT_gpstatus == 0 ? " solid \"$FFACE\" $FSIZE" : " solid \"$FFACE\" $FSIZE";
+			
+			%P_PS = ( $FWD => 0.1, $REV => 0.1, $HLT => 0.1 );
 
-    %P_PT = ( $FWD => 6, $REV => 6, $HLT => 6 );
-    %P_LT = defined $OPT_Hfile ?
-        ( $FWD => 2, $REV => 2, $HLT => 1 ) :
-        ( $FWD => 1, $REV => 3, $HLT => 2 );
+			%P_LW = $OPT_coverage || $OPT_color ?
+				( $FWD => 4.0, $REV => 4.0, $HLT => 4.0 ) :
+				( $FWD => 2.0, $REV => 2.0, $HLT => 2.0 );
 
-    $P_WITH = $OPT_coverage || $OPT_color ? "w l" : "w lp";
+			$P_SIZE = $OPT_coverage ?
+				"set size ".(1.0 * $SIZE).",".(0.5 * $SIZE) :
+				"set size ".(1.0 * $SIZE).",".(1.0 * $SIZE);
 
-    $P_FORMAT = "set format \"$TFORMAT\"";
-    if ( $OPT_gpstatus == 0 ) {
-        $P_LS = "set style line";
-        $P_KEY = "unset key";
-        $P_FORMAT .= "\nset mouse format \"$TFORMAT\"";
-        $P_FORMAT .= "\nset mouse mouseformat \"$MFORMAT\"";
-        $P_FORMAT .= "\nset mouse clipboardformat \"$MFORMAT\"";
-    }
-    else {
-        $P_LS = "set linestyle";
-        $P_KEY = "set nokey";
-    }
+			last;
+		}
+
+		die "ERROR: Don't know how to initialize terminal, $OPT_terminal\n";
+	}
+
+#-- plot commands
+	my ($P_WITH, $P_FORMAT, $P_LS, $P_KEY, %P_PT, %P_LT);
+
+	%P_PT = ( $FWD => 6, $REV => 6, $HLT => 6 );
+	%P_LT = defined $OPT_Hfile ?
+	( $FWD => 2, $REV => 2, $HLT => 1 ) :
+	( $FWD => 1, $REV => 3, $HLT => 2 );
+
+	$P_WITH = $OPT_coverage || $OPT_color ? "w l" : "w lp";
+
+	$P_FORMAT = "set format \"$TFORMAT\"";
+	if ( $OPT_gpstatus == 0 ) {
+		$P_LS = "set style line";
+		$P_KEY = "unset key";
+		$P_FORMAT .= "\nset mouse format \"$TFORMAT\"";
+		$P_FORMAT .= "\nset mouse mouseformat \"$MFORMAT\"";
+		$P_FORMAT .= "\nset mouse clipboardformat \"$MFORMAT\"";
+	}
+	else {
+		$P_LS = "set linestyle";
+		$P_KEY = "set nokey";
+	}
 
 
-    my @refk = keys (%$rref);
-    my @qryk = keys (%$qref);
-    my ($xrange, $yrange);
-    my ($xlabel, $ylabel);
-    my ($tic, $dir);
-    my $border = 0;
+	my @refk = keys (%$rref);
+	my @qryk = keys (%$qref);
+	my ($xrange, $yrange);
+	my ($xlabel, $ylabel);
+	my ($tic, $dir);
+	my $border = 0;
 
-    #-- terminal header and output
-    print GFILE "set terminal $P_TERM\n";
+#-- terminal header and output
+	print GFILE "set terminal $P_TERM\n";
 
-    if ( defined $OPT_Pfile ) {
-        print GFILE "set output \"$OPT_Pfile\"\n";
-    }
+	if (defined $OPT_Pfile) {
+		print GFILE "set output \"$OPT_Pfile\"\n";
+	}
 
-    if ( defined $OPT_title ) {
-        print GFILE "set title \"$OPT_title\"\n";
-    }
+	if (defined $OPT_title) {
+		print GFILE "set title \"$OPT_title\"\n";
+	}
 
-    #-- set tics, determine labels, ranges (ref)
-    if ( scalar (@refk) == 1 ) {
-        $xlabel = $refk[0];
-        $xrange = $rref->{$xlabel}[1];
-    }
-    else {
-        $xrange = 0;
-        print GFILE "set xtics rotate \( \\\n";
-        foreach $xlabel ( sort { $rref->{$a}[0] <=> $rref->{$b}[0] } @refk ) {
-            $xrange += $rref->{$xlabel}[1];
-            $tic = $rref->{$xlabel}[0] + 1;
-            $dir = ($rref->{$xlabel}[2] == 1) ? "" : "*";
-            print GFILE " \"$dir$xlabel\" $tic, \\\n";
-        }
-        print GFILE " \"\" $xrange \\\n\)\n";
-        $xlabel = "REF";
-    }
-    if ( $xrange == 0 ) { $xrange = "*"; }
+#-- set tics, determine labels, ranges (ref)
+	if ( scalar (@refk) == 1 ) {
+		$xlabel = $refk[0];
+		$xrange = $rref->{$xlabel}[1];
+	}
+	else {
+		$xrange = 0;
+		print GFILE "set xtics rotate \( \\\n";
+		foreach $xlabel ( sort { $rref->{$a}[0] <=> $rref->{$b}[0] } @refk ) {
+			$xrange += $rref->{$xlabel}[1];
+			$tic = $rref->{$xlabel}[0] + 1;
+			$dir = ($rref->{$xlabel}[2] == 1) ? "" : "*";
+			print GFILE " \"$dir$xlabel\" $tic, \\\n";
+		}
+		print GFILE " \"\" $xrange \\\n\)\n";
+		$xlabel = "REF";
+	}
+	if ( $xrange == 0 ) { $xrange = "*"; }
 
-    #-- set tics, determine labels, ranges (qry)
-    if ( $OPT_coverage ) {
-        $ylabel = "%SIM";
-        $yrange = 110;
-    }
-    elsif ( scalar (@qryk) == 1 ) {
-        $ylabel = $qryk[0];
-        $yrange = $qref->{$ylabel}[1];
-    }
-    else {
-        $yrange = 0;
-        print GFILE "set ytics \( \\\n";
-        foreach $ylabel ( sort { $qref->{$a}[0] <=> $qref->{$b}[0] } @qryk ) {
-            $yrange += $qref->{$ylabel}[1];
-            $tic = $qref->{$ylabel}[0] + 1;
-            $dir = ($qref->{$ylabel}[2] == 1) ? "" : "*";
-            print GFILE " \"$dir$ylabel\" $tic, \\\n";
-        }
-        print GFILE " \"\" $yrange \\\n\)\n";
-        $ylabel = "QRY";
-    }
-    if ( $yrange == 0 ) { $yrange = "*"; }
+#-- set tics, determine labels, ranges (qry)
+	if ($OPT_coverage) {
+		$ylabel = "%SIM";
+		$yrange = 110;
+	}
+	elsif (scalar (@qryk) == 1) {
+		$ylabel = $qryk[0];
+		$yrange = $qref->{$ylabel}[1];
+	}
+	else {
+		$yrange = 0;
+		print GFILE "set ytics \( \\\n";
+		foreach $ylabel ( sort { $qref->{$a}[0] <=> $qref->{$b}[0] } @qryk ) {
+			$yrange += $qref->{$ylabel}[1];
+			$tic = $qref->{$ylabel}[0] + 1;
+			$dir = ($qref->{$ylabel}[2] == 1) ? "" : "*";
+			print GFILE " \"$dir$ylabel\" $tic, \\\n";
+		}
+		print GFILE " \"\" $yrange \\\n\)\n";
+		$ylabel = "QRY";
+	}
+	if ( $yrange == 0 ) { $yrange = "*"; }
 
-    #-- determine borders
-    if ( $xrange ne "*" && scalar (@refk) == 1 ) { $border |= 10; }
-    if ( $yrange ne "*" && scalar (@qryk) == 1 ) { $border |= 5; }
-    if ( $OPT_coverage ) { $border |= 5; }
+#-- determine borders
+	if ( $xrange ne "*" && scalar (@refk) == 1 ) { $border |= 10; }
+	if ( $yrange ne "*" && scalar (@qryk) == 1 ) { $border |= 5; }
+	if ( $OPT_coverage ) { $border |= 5; }
 
-    #-- grid, labels, border
-    print GFILE
-        "$P_SIZE\n",
-        "set grid\n",
-        "$P_KEY\n",
-        "set border $border\n",
-        "set tics scale 0\n",
-        "set xlabel \"$xlabel\"\n",
-        "set ylabel \"$ylabel\"\n",
-        "$P_FORMAT\n";
+#-- grid, labels, border
+	print GFILE
+		"$P_SIZE\n",
+		"set grid\n",
+		"$P_KEY\n",
+		"set border $border\n",
+		"set tics scale 0\n",
+		"set xlabel \"$xlabel\"\n",
+		"set ylabel \"$ylabel\"\n",
+		"$P_FORMAT\n";
 
-    #-- ranges
-    if ( defined $OPT_xrange ) { print GFILE "set xrange $OPT_xrange\n"; }
-    else                       { print GFILE "set xrange [1:$xrange]\n"; }
+#-- ranges
+	if ( defined $OPT_xrange ) { print GFILE "set xrange $OPT_xrange\n"; }
+	else                       { print GFILE "set xrange [1:$xrange]\n"; }
 
-    if ( defined $OPT_yrange ) { print GFILE "set yrange $OPT_yrange\n"; }
-    else                       { print GFILE "set yrange [1:$yrange]\n"; }
+	if ( defined $OPT_yrange ) { print GFILE "set yrange $OPT_yrange\n"; }
+	else                       { print GFILE "set yrange [1:$yrange]\n"; }
 
-    #-- if %sim plot
-    if ( $OPT_color ) {
-        print GFILE
-            "set zrange [0:100]\n",
-            "set colorbox default\n",
-            "set cblabel \"%similarity\"\n",
-            "set cbrange [0:100]\n",
-            "set cbtics 20\n",
-            "set pm3d map\n",
-            "set palette model RGB defined ( \\\n",
-            "  0 \"#000000\", \\\n",
-            "  4 \"#DD00DD\", \\\n",
-            "  6 \"#0000DD\", \\\n",
-            "  7 \"#00DDDD\", \\\n",
-            "  8 \"#00DD00\", \\\n",
-            "  9 \"#DDDD00\", \\\n",
-            " 10 \"#DD0000\"  \\\n)\n";
-    }
+#-- if %sim plot
+	if ( $OPT_color ) {
+	print GFILE
+		"set zrange [0:100]\n",
+		"set colorbox default\n",
+		"set cblabel \"%similarity\"\n",
+		"set cbrange [0:100]\n",
+		"set cbtics 20\n",
+		"set pm3d map\n",
+		"set palette model RGB defined ( \\\n",
+		"  0 \"#000000\", \\\n",
+		"  4 \"#DD00DD\", \\\n",
+		"  6 \"#0000DD\", \\\n",
+		"  7 \"#00DDDD\", \\\n",
+		"  8 \"#00DD00\", \\\n",
+		"  9 \"#DDDD00\", \\\n",
+		" 10 \"#DD0000\"  \\\n)\n";
+	}
 
-    foreach my $s ( ($FWD, $REV, $HLT) ) {
-        my $ss = "$P_LS $s ";
-        $ss .= $OPT_color ? " palette" : " lt $P_LT{$s}";
-        $ss .= " lw $P_LW{$s}";
-        if ( ! $OPT_coverage || $s == $HLT ) {
-            $ss .= " pt $P_PT{$s} ps $P_PS{$s}";
-        }
-        print GFILE "$ss\n";
-    }
+	foreach my $s ( ($FWD, $REV, $HLT) ) {
+		my $ss = "$P_LS $s ";
+		$ss .= $OPT_color ? " palette" : " lt $P_LT{$s}";
+		$ss .= " lw $P_LW{$s}";
+		if ( ! $OPT_coverage || $s == $HLT ) {
+			$ss .= " pt $P_PT{$s} ps $P_PS{$s}";
+		}
+		print GFILE "$ss\n";
+	}
 
-    #-- plot it
-    print GFILE
-        ($OPT_color ? "splot \\\n" : "plot \\\n");
-    print GFILE
-        " \"$OPT_Ffile\" title \"FWD\" $P_WITH ls $FWD, \\\n",
-        " \"$OPT_Rfile\" title \"REV\" $P_WITH ls $REV",
-        (! defined $OPT_Hfile ? "\n" :
-         ", \\\n \"$OPT_Hfile\" title \"HLT\" w lp ls $HLT");
-    
-    #-- interactive mode
-    if ( $OPT_terminal eq $X11 ) {
-        print GFILE "\n",
-        "print \"-- INTERACTIVE MODE --\"\n",
-        "print \"consult gnuplot docs for command list\"\n",
-        "print \"mouse 1: coords to clipboard\"\n",
-        "print \"mouse 2: mark on plot\"\n",
-        "print \"mouse 3: zoom box\"\n",
-        "print \"'h' for help in plot window\"\n",
-        "print \"enter to exit\"\n",
-        "pause -1\n";
-    }
+#-- plot it
+	print GFILE ($OPT_color ? "splot \\\n" : "plot \\\n");
+	print GFILE
+		" \"$OPT_Ffile\" title \"FWD\" $P_WITH ls $FWD, \\\n",
+		" \"$OPT_Rfile\" title \"REV\" $P_WITH ls $REV",
+		(! defined $OPT_Hfile ? "\n" :
+		", \\\n \"$OPT_Hfile\" title \"HLT\" w lp ls $HLT");
 
-    close (GFILE)
-        or print STDERR "WARNING: Trouble closing $OPT_Gfile, $!\n";
+	#-- interactive mode
+	if ( $OPT_terminal eq $X11 ) {
+		print GFILE "\n",
+		"print \"-- INTERACTIVE MODE --\"\n",
+		"print \"consult gnuplot docs for command list\"\n",
+		"print \"mouse 1: coords to clipboard\"\n",
+		"print \"mouse 2: mark on plot\"\n",
+		"print \"mouse 3: zoom box\"\n",
+		"print \"'h' for help in plot window\"\n",
+		"print \"enter to exit\"\n",
+		"pause -1\n";
+	}
+
+	close (GFILE) or print STDERR "WARNING: Trouble closing $OPT_Gfile, $!\n";
 }
 
 
 #------------------------------------------------------------------- RunGP ----#
-sub RunGP ( )
-{
+sub RunGP ( ) {
     if ( defined $OPT_Pfile ) {
         print STDERR "Rendering plot $OPT_Pfile\n";
     }
@@ -1340,8 +1332,7 @@ sub RunGP ( )
 
 
 #---------------------------------------------------------------- ListenGP ----#
-sub ListenGP($$)
-{
+sub ListenGP($$) {
     my $rref = shift;
     my $qref = shift;
 
@@ -1429,15 +1420,13 @@ sub ListenGP($$)
 
 
 #------------------------------------------------------------ ParseOptions ----#
-sub ParseOptions ( )
-{
-    my ($opt_small, $opt_medium, $opt_large);
-    my ($opt_ps, $opt_x11, $opt_png);
-    my $cnt;
+sub ParseOptions ( ) {
+	my ($opt_small, $opt_medium, $opt_large);
+	my ($opt_ps, $opt_x11, $opt_png, $opt_eps);
+	my $cnt;
 
-    #-- Get options
-    my $err = $tigr -> TIGR_GetOptions
-        (
+#-- Get options
+	my $err = $tigr -> TIGR_GetOptions (
          "b|breaklen:i" => \$OPT_breaklen,
          "color!"       => \$OPT_color,
          "c|coverage!"  => \$OPT_coverage,
@@ -1460,142 +1449,133 @@ sub ParseOptions ( )
          "x11"          => \$opt_x11,
          "postscript"   => \$opt_ps,
          "png"          => \$opt_png,
+         "eps"          => \$opt_eps,
          "small"        => \$opt_small,
          "medium"       => \$opt_medium,
          "large"        => \$opt_large,
          "fat"          => \$OPT_ONLY_USE_FATTEST,
          );
 
-    if ( !$err  ||  scalar (@ARGV) != 1 ) {
-        $tigr -> printUsageInfo( );
-        die "Try '$0 -h' for more information.\n";
-    }
+	if ( !$err  ||  scalar (@ARGV) != 1 ) {
+		$tigr -> printUsageInfo( );
+		die "Try '$0 -h' for more information.\n";
+	}
 
-    $cnt = 0;
-    if ( $opt_png ) { $OPT_terminal = $PNG; $cnt ++; }
-    if ( $opt_ps  ) { $OPT_terminal = $PS;  $cnt ++; }
-    if ( $opt_x11 ) { $OPT_terminal = $X11; $cnt ++; }
-    if ( $cnt > 1 ) {
-        print STDERR
-            "WARNING: Multiple terminals not allowed, using '$OPT_terminal'\n";
-    }
+### Decide output format
+	$cnt = 0;
+	if ( $opt_png ) { $OPT_terminal = $PNG; $cnt ++; }
+	if ( $opt_ps  ) { $OPT_terminal = $PS;  $cnt ++; }
+	if ( $opt_x11 ) { $OPT_terminal = $X11; $cnt ++; }
+	if ( $opt_eps ) { $OPT_terminal = $EPS; $cnt ++; }
+	if ( $cnt > 1 ) {
+		print STDERR "WARNING: Multiple terminals not allowed, using '$OPT_terminal'\n";
+	}
 
-    $cnt = 0;
-    if ( $opt_large  ) { $OPT_size = $LARGE;  $cnt ++; }
-    if ( $opt_medium ) { $OPT_size = $MEDIUM; $cnt ++; }
-    if ( $opt_small  ) { $OPT_size = $SMALL;  $cnt ++; }
-    if ( $cnt > 1 ) {
-        print STDERR
-            "WARNING: Multiple sizes now allowed, using '$OPT_size'\n";
-    }
+### Decide output size
+	$cnt = 0;
+	if ( $opt_large  ) { $OPT_size = $LARGE;  $cnt ++; }
+	if ( $opt_medium ) { $OPT_size = $MEDIUM; $cnt ++; }
+	if ( $opt_small  ) { $OPT_size = $SMALL;  $cnt ++; }
+	if ( $cnt > 1 ) {
+		print STDERR "WARNING: Multiple sizes now allowed, using '$OPT_size'\n";
+	}
 
-    #-- Check that status of gnuplot
-    $OPT_gpstatus = system ("gnuplot --version");
+#-- Check that status of gnuplot
+	$OPT_gpstatus = system ("gnuplot --version");
 
-    if ( $OPT_gpstatus == -1 ) {
-        print STDERR
-            "WARNING: Could not find gnuplot, plot will not be rendered\n";
-    }
-    elsif ( $OPT_gpstatus ) {
-        print STDERR
-            "WARNING: Using outdated gnuplot, use v4.0 for best results\n";
+	if ( $OPT_gpstatus == -1 ) {
+		print STDERR "WARNING: Could not find gnuplot, plot will not be rendered\n";
+	}
+	elsif ( $OPT_gpstatus ) {
+		print STDERR "WARNING: Using outdated gnuplot, use v4.0 for best results\n";
 
-        if ( $OPT_color ) {
-            print STDERR
-                "WARNING: Turning of --color option for compatibility\n";
-            undef $OPT_color;
-        }
+		if ( $OPT_color ) {
+			print STDERR "WARNING: Turning of --color option for compatibility\n";
+			undef $OPT_color;
+		}
 
-        if ( $OPT_terminal eq $PNG  &&  $OPT_size ne $SMALL ) { 
-            print STDERR
-                "WARNING: Turning of --size option for compatibility\n";
-            $OPT_size = $SMALL;
-        }
-    }
+		if ( $OPT_terminal eq $PNG  &&  $OPT_size ne $SMALL ) { 
+			print STDERR "WARNING: Turning of --size option for compatibility\n";
+			$OPT_size = $SMALL;
+		}
+	}
 
-    #-- Check options
-    if ( !exists $TERMSIZE{$OPT_terminal} ) {
-        die "ERROR: Invalid terminal type, $OPT_terminal\n";
-    }
+#-- Check options
+	if (! exists $TERMSIZE{$OPT_terminal}) {
+		die "ERROR: Invalid terminal type, $OPT_terminal\n";
+	}
 
-    if ( !exists $TERMSIZE{$OPT_terminal}{$OPT_size} ) {
-        die "ERROR: Invalid terminal size, $OPT_size\n";
-    }
+	if (! exists $TERMSIZE{$OPT_terminal}{$OPT_size}) {
+		die "ERROR: Invalid terminal size, $OPT_size\n";
+	}
 
-    if ( $OPT_xrange ) {
-        $OPT_xrange =~ tr/,/:/;
-        $OPT_xrange =~ /^\[\d+:\d+\]$/
-            or die "ERROR: Invalid xrange format, $OPT_xrange\n";
-    }
+	if ($OPT_xrange) {
+		$OPT_xrange =~ tr/,/:/;
+		$OPT_xrange =~ /^\[\d+:\d+\]$/ or die "ERROR: Invalid xrange format, $OPT_xrange\n";
+	}
 
-    if ( $OPT_yrange ) {
-        $OPT_yrange =~ tr/,/:/;
-        $OPT_yrange =~ /^\[\d+:\d+\]$/
-            or die "ERROR: Invalid yrange format, $OPT_yrange\n";
-    }
+	if ( $OPT_yrange ) {
+		$OPT_yrange =~ tr/,/:/;
+		$OPT_yrange =~ /^\[\d+:\d+\]$/ or die "ERROR: Invalid yrange format, $OPT_yrange\n";
+	}
 
-    #-- Set file names
-    $OPT_Mfile = $ARGV[0];
-    $tigr->isReadableFile ($OPT_Mfile)
-        or die "ERROR: Could not read $OPT_Mfile, $!\n";
+#-- Set file names
+	$OPT_Mfile = $ARGV[0];
+	$tigr->isReadableFile ($OPT_Mfile) or die "ERROR: Could not read $OPT_Mfile, $!\n";
 
-    $OPT_Ffile = $OPT_prefix . $SUFFIX{$FWDPLOT};
-    $tigr->isWritableFile ($OPT_Ffile) or $tigr->isCreatableFile ($OPT_Ffile)
-        or die "ERROR: Could not write $OPT_Ffile, $!\n";
+	$OPT_Ffile = $OPT_prefix . $SUFFIX{$FWDPLOT};
+	$tigr->isWritableFile ($OPT_Ffile) or $tigr->isCreatableFile ($OPT_Ffile)
+		or die "ERROR: Could not write $OPT_Ffile, $!\n";
 
-    $OPT_Rfile = $OPT_prefix . $SUFFIX{$REVPLOT};
-    $tigr->isWritableFile ($OPT_Rfile) or $tigr->isCreatableFile ($OPT_Rfile)
-        or die "ERROR: Could not write $OPT_Rfile, $!\n";
+	$OPT_Rfile = $OPT_prefix . $SUFFIX{$REVPLOT};
+	$tigr->isWritableFile ($OPT_Rfile) or $tigr->isCreatableFile ($OPT_Rfile)
+		or die "ERROR: Could not write $OPT_Rfile, $!\n";
 
-    if ( defined $OPT_breaklen || defined $OPT_SNP ) {
-        $OPT_Hfile = $OPT_prefix . $SUFFIX{$HLTPLOT};
-        $tigr->isWritableFile($OPT_Hfile) or $tigr->isCreatableFile($OPT_Hfile)
-            or die "ERROR: Could not write $OPT_Hfile, $!\n";
-    }
+	if ( defined $OPT_breaklen || defined $OPT_SNP ) {
+		$OPT_Hfile = $OPT_prefix . $SUFFIX{$HLTPLOT};
+		$tigr->isWritableFile($OPT_Hfile) or $tigr->isCreatableFile($OPT_Hfile)
+			or die "ERROR: Could not write $OPT_Hfile, $!\n";
+	}
 
-    if ($OPT_ONLY_USE_FATTEST)
-    {
-      $OPT_layout = 1;
-    }
+	if ($OPT_ONLY_USE_FATTEST) {
+		$OPT_layout = 1;
+	}
 
-    if ( $OPT_filter || $OPT_layout ) {
-        $OPT_Dfile = $OPT_prefix . $SUFFIX{$FILTER};
-        $tigr->isWritableFile($OPT_Dfile) or $tigr->isCreatableFile($OPT_Dfile)
-            or die "ERROR: Could not write $OPT_Dfile, $!\n";
-    }
+	if ( $OPT_filter || $OPT_layout ) {
+		$OPT_Dfile = $OPT_prefix . $SUFFIX{$FILTER};
+		$tigr->isWritableFile($OPT_Dfile) or $tigr->isCreatableFile($OPT_Dfile)
+			or die "ERROR: Could not write $OPT_Dfile, $!\n";
+	}
 
-    $OPT_Gfile = $OPT_prefix . $SUFFIX{$GNUPLOT};
-    $tigr->isWritableFile ($OPT_Gfile) or $tigr->isCreatableFile ($OPT_Gfile)
-        or die "ERROR: Could not write $OPT_Gfile, $!\n";
+	$OPT_Gfile = $OPT_prefix . $SUFFIX{$GNUPLOT};
+	$tigr->isWritableFile ($OPT_Gfile) or $tigr->isCreatableFile ($OPT_Gfile)
+		or die "ERROR: Could not write $OPT_Gfile, $!\n";
 
-    if ( exists $SUFFIX{$OPT_terminal} ) {
-        $OPT_Pfile = $OPT_prefix . $SUFFIX{$OPT_terminal};
-        $tigr->isWritableFile($OPT_Pfile) or $tigr->isCreatableFile($OPT_Pfile)
-            or die "ERROR: Could not write $OPT_Pfile, $!\n";
-    }
+	if ( exists $SUFFIX{$OPT_terminal} ) {
+		$OPT_Pfile = $OPT_prefix . $SUFFIX{$OPT_terminal};
+		$tigr->isWritableFile($OPT_Pfile) or $tigr->isCreatableFile($OPT_Pfile)
+			or die "ERROR: Could not write $OPT_Pfile, $!\n";
+	}
 
-    if ( defined $OPT_IDRfile ) {
-        $tigr->isReadableFile ($OPT_IDRfile)
-            or die "ERROR: Could not read $OPT_IDRfile, $!\n";
-    }
+	if ( defined $OPT_IDRfile ) {
+		$tigr->isReadableFile ($OPT_IDRfile)
+			or die "ERROR: Could not read $OPT_IDRfile, $!\n";
+	}
 
-    if ( defined $OPT_IDQfile ) {
-        $tigr->isReadableFile ($OPT_IDQfile)
-            or die "ERROR: Could not read $OPT_IDQfile, $!\n";
-    }
+	if ( defined $OPT_IDQfile ) {
+		$tigr->isReadableFile ($OPT_IDQfile)
+			or die "ERROR: Could not read $OPT_IDQfile, $!\n";
+	}
 
-    if ( (defined $OPT_rport || defined $OPT_qport) &&
-         ($OPT_terminal ne $X11 || $OPT_gpstatus ) ) {
-        print STDERR
-            "WARNING: Port options available only for v4.0 X11 plots\n";
-        undef $OPT_rport;
-        undef $OPT_qport;
-    }
+	if ( (defined $OPT_rport || defined $OPT_qport) &&
+		($OPT_terminal ne $X11 || $OPT_gpstatus ) ) {
+		print STDERR "WARNING: Port options available only for v4.0 X11 plots\n";
+		undef $OPT_rport;
+		undef $OPT_qport;
+	}
 
-
-    if ( defined $OPT_color && defined $OPT_Hfile ) {
-        print STDERR
-            "WARNING: Turning off --color option so highlighting is visible\n";
-        undef $OPT_color;
-    }
+	if ( defined $OPT_color && defined $OPT_Hfile ) {
+		print STDERR "WARNING: Turning off --color option so highlighting is visible\n";
+		undef $OPT_color;
+	}
 }
