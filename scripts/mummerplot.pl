@@ -30,7 +30,7 @@ my $SCRIPT_DIR = "__SCRIPT_DIR";
 my $X11    = "x11";
 my $PS     = "postscript";
 my $PNG    = "png";
-my $EPS    = "eps"
+my $EPS    = "eps";
 
 #-- terminal sizes
 my $SMALL  = "small";
@@ -40,7 +40,7 @@ my $LARGE  = "large";
 my %TERMSIZE = (
      $X11 => { $SMALL => 500, $MEDIUM => 700,  $LARGE => 900  }, # screen pix
      $PS  => { $SMALL => 1,   $MEDIUM => 2,    $LARGE => 3    }, # pages
-     $PNG => { $SMALL => 800, $MEDIUM => 1024, $LARGE => 1400 }  # image pix
+     $PNG => { $SMALL => 800, $MEDIUM => 1024, $LARGE => 1400 },  # image pix
      $EPS => { $SMALL => 1,   $MEDIUM => 2,    $LARGE => 3    }, # pages
      );
 
@@ -1124,7 +1124,7 @@ sub WriteGP ($$) {
 				"set size ".(1.0 * $SIZE).",".(1.0 * $SIZE);
 
 			last;
-		}
+		};
 
 		die "ERROR: Don't know how to initialize terminal, $OPT_terminal\n";
 	}
